@@ -10,34 +10,17 @@ using UnityEngine.Networking;
 /// http://127.0.0.1:5000/docs
 /// </summary>
 
-public class OpenAIAPI : MonoBehaviour
+public static class OpenAIAPI
 {
-    private string strApiUrl = "http://127.0.0.1:5000/v1/completions";
-
-    public void MakeRequest(string _strPrompt, System.Action<string> _actionOnComplete)
+    public static IEnumerator ieMakeRequest(LLMRequest _request, string _strApiUrl, System.Action<string> _actionOnUpdate, System.Action<string> _actionOnComplete)
     {
-        StartCoroutine(ieMakeRequest(_strPrompt, _actionOnComplete));
-    }
-
-    IEnumerator ieMakeRequest(string _strPrompt, System.Action<string> _actionOnComplete)
-    {
-        LLMRequest requestBody = new LLMRequest()
-        {
-            strPrompt = _strPrompt,
-            bStream = true,
-            iMaxTokens = 50,
-            fTemperature = 0.7f,
-            fTopP = 0.9f,
-            iSeed = Random.Range(0, int.MaxValue),
-        };
-
-        string strJsonData = JsonConvert.SerializeObject(requestBody, Formatting.Indented, new JsonSerializerSettings
+        string strJsonData = JsonConvert.SerializeObject(_request, Formatting.Indented, new JsonSerializerSettings
         {
             NullValueHandling = NullValueHandling.Ignore
         });
         Debug.Log($"Sending request: \n{strJsonData}");
 
-        using (UnityWebRequest request = new UnityWebRequest(strApiUrl, "POST"))
+        using (UnityWebRequest request = new UnityWebRequest(_strApiUrl, "POST"))
         {
             request.SetRequestHeader("accept", "application/json");
             request.SetRequestHeader("Content-Type", "application/json");
@@ -48,12 +31,11 @@ public class OpenAIAPI : MonoBehaviour
             UnityWebRequestAsyncOperation asyncOperation = request.SendWebRequest();
             float fLastProgress = 0f;
 
-            string strFullText = "";
             int iLastIndex = 0;
 
+            // for streaming: check if new tokens arrived
             while (!asyncOperation.isDone)
             {
-                // for streaming: 
                 float fCurrentProgress = request.downloadProgress;
                 // Check if progress has changed
                 if (fCurrentProgress != fLastProgress)
@@ -71,7 +53,8 @@ public class OpenAIAPI : MonoBehaviour
                             continue;
                         string strMessagePruned = strMessage.Replace("data: ", ""); // TODO: make more performant
                         LLMAnswer llmAnswer = JsonConvert.DeserializeObject<LLMAnswer>(strMessagePruned);
-                        _actionOnComplete?.Invoke(llmAnswer.liChoices[0].strText);
+                        _actionOnUpdate?.Invoke(llmAnswer.liChoices[0].strText);
+                        Debug.Log($"Updated request with {llmAnswer.liChoices[0].strText}");
                     }
                 }
                 yield return null;
@@ -80,9 +63,8 @@ public class OpenAIAPI : MonoBehaviour
             if (request.result != UnityWebRequest.Result.Success)
                 throw new System.Exception(request.error);
 
-            // text_completion.chunk
-            // text_completion
-            if (requestBody.bStream != true)
+            // without streaming: take message after it arrived in full
+            if (_request.bStream != true)
             {
                 Debug.Log("end: " + request.downloadHandler.text);
                 LLMAnswer llmAnswer = JsonConvert.DeserializeObject<LLMAnswer>(request.downloadHandler.text);
@@ -95,25 +77,6 @@ public class OpenAIAPI : MonoBehaviour
 }
 
 
-/*
-public class LLMRequest
-{
-    [JsonProperty("prompt")]
-    public string strPrompt = "";
-    //[JsonProperty("stream")]
-    //public bool bStream = true;
-    [JsonProperty("max_tokens")]
-    public int iMaxTokens = 50;
-    [JsonProperty("temperature")]
-    public float fTemperature = 0.7f;
-    [JsonProperty("top_p")]
-    public float fTopP = 0.9f;
-    [JsonProperty("min_p")]
-    public float fMinP = 0.15f;
-    [JsonProperty("seed")]
-    public int iSeed = Random.Range(0, int.MaxValue);
-}
-*/
 
 [System.Serializable]
 public class LLMRequest
