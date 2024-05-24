@@ -52,9 +52,16 @@ public static class OpenAIAPI
                         if (strMessage.Length < 5) // sometimes last line is empty
                             continue;
                         string strMessagePruned = strMessage.Replace("data: ", ""); // TODO: make more performant
-                        LLMAnswer llmAnswer = JsonConvert.DeserializeObject<LLMAnswer>(strMessagePruned);
-                        _actionOnUpdate?.Invoke(llmAnswer.liChoices[0].strText);
-                        Debug.Log($"Updated request with {llmAnswer.liChoices[0].strText}");
+                        try
+                        {
+                            LLMAnswer llmAnswer = JsonConvert.DeserializeObject<LLMAnswer>(strMessagePruned);
+                            _actionOnUpdate?.Invoke(llmAnswer.liChoices[0].strText);
+                            //Debug.Log($"Updated request with {llmAnswer.liChoices[0].strText}");
+                        }
+                        catch (System.Exception e)
+                        {
+                            Debug.Log($"Error: {e.Message}");
+                        }
                     }
                 }
                 yield return null;
@@ -70,9 +77,11 @@ public static class OpenAIAPI
                 LLMAnswer llmAnswer = JsonConvert.DeserializeObject<LLMAnswer>(request.downloadHandler.text);
                 _actionOnComplete?.Invoke(llmAnswer.liChoices[0].strText);
             }
-            
+            else
+            {
+                _actionOnComplete?.Invoke("");
+            }
         }
-
     }
 }
 
